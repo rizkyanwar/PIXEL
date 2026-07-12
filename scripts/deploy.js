@@ -33,11 +33,14 @@ console.log("TokenFactory launchpad set");
 const tx2 = await vault.contract.setTokenFactory(factory.address);
 await tx2.wait();
   console.log("Vault tokenFactory set");
-  
+
   console.log("TokenFactory launchpad set");
 
   console.log("\nPaste this to .env:");
-  console.log(`VITE_RECOM_LAUNCHPAD=${launchpad.address}`);
+console.log(`VITE_RECOM_VAULT=${vault.address}`);
+console.log(`VITE_RECOM_TOKEN_FACTORY=${factory.address}`);
+console.log(`VITE_RECOM_NFT_DEPLOYER=${nftDeployer.address}`);
+console.log(`VITE_RECOM_LAUNCHPAD=${launchpad.address}`);
 }
 
 main().catch((e) => {

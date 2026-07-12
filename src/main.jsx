@@ -2,7 +2,8 @@ import React, { useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { ethers } from 'ethers';
 import './styles.css';
-import hookedLogo from '../public/logo.png';
+
+const hookedLogo = '/logo.png';
 
 const CHAIN_ID = Number(import.meta.env.VITE_CHAIN_ID || 46630);
 const RPC_URL =
@@ -12,17 +13,11 @@ const EXPLORER_URL =
   'https://explorer.testnet.chain.robinhood.com';
 
 const LAUNCHPAD = import.meta.env.VITE_RECOM_LAUNCHPAD || '';
-const DEFAULT_COLLECTION =
-  import.meta.env.VITE_DEFAULT_COLLECTION ||
-  '0xC71aBD280d36D973D1C15A060614C7453c1e72e2';
-const DEFAULT_TOKEN =
-  import.meta.env.VITE_DEFAULT_TOKEN ||
-  '0x7343a78b3fd567f1CEB923Ed26697169c8f33Da9';
-const DEFAULT_POOL =
-  import.meta.env.VITE_DEFAULT_POOL ||
-  '0xE51672ed1195B103C8fEA1f4829e0341ffF1ef6E';
-
+const DEFAULT_COLLECTION = import.meta.env.VITE_DEFAULT_COLLECTION || '';
+const DEFAULT_TOKEN = import.meta.env.VITE_DEFAULT_TOKEN || '';
+const DEFAULT_POOL = import.meta.env.VITE_DEFAULT_POOL || '';
 const DEFAULT_VAULT = import.meta.env.VITE_RECOM_VAULT || '';
+
 const MAX_SUPPLY = Number(import.meta.env.VITE_MAX_SUPPLY || 100);
 
 const LAUNCHPAD_ABI = [
@@ -49,12 +44,10 @@ const TOKEN_ABI = [
 ];
 
 const VAULT_ABI = [
-  'function currentEpoch() view returns(uint256)',
-  'function epochExecuted(uint256 epochId) view returns(bool)',
-  'function totalAirdropped() view returns(uint256)',
-  'function totalBurned() view returns(uint256)',
-  'function executeEpochPayout(uint256 epochId) external',
-  'function executeBurn(uint256 epochId) external',
+  'function tokenStart(address token) view returns(uint256)',
+  'function executedEpochs(address token) view returns(uint8)',
+  'function epochTimes(uint256 index) view returns(uint256)',
+  'function executeEpoch(address token,address[] losers) external',
 ];
 
 function shortAddress(addr) {
@@ -74,14 +67,12 @@ function isAddress(addr) {
   return ethers.isAddress(addr || '');
 }
 
-function formatTokenAmount(value) {
-  if (value === null || value === undefined || value === '') return '-';
+function formatUnixTime(value) {
+  const n = Number(value || 0);
 
-  try {
-    return ethers.formatEther(value);
-  } catch {
-    return String(value);
-  }
+  if (!n) return '-';
+
+  return new Date(n * 1000).toLocaleString();
 }
 
 async function copyText(text, label = 'Address') {
@@ -138,24 +129,25 @@ function App() {
     pool: DEFAULT_POOL,
     total: null,
     price: null,
-    bonded: true,
+    bonded: Boolean(DEFAULT_TOKEN),
     vaultLocked: null,
     deployedAt: null,
   });
 
   const [epoch, setEpoch] = useState({
     vault: DEFAULT_VAULT,
+    tokenStart: '-',
     currentEpoch: '-',
-    executed: false,
-    totalAirdropped: '-',
-    totalBurned: '-',
+    executedCount: '-',
+    nextReadyAt: '-',
+    state: 'Not loaded',
     tx: '',
     loading: false,
     error: '',
   });
 
   const [form, setForm] = useState({
-    uri: 'https://example.com/metadata/{id}.json',
+    uri: '{{https://example.com/metadata/{id}}}.json',
     collectionName: 'HOOKED NFT',
     collectionSymbol: 'HOOKED',
     tokenName: 'HOOKED Token',
@@ -194,6 +186,7 @@ function App() {
 
     const provider = new ethers.BrowserProvider(window.ethereum);
     const accounts = await provider.send('eth_requestAccounts', []);
+
     setAccount(accounts[0]);
 
     const net = await provider.getNetwork();
@@ -310,6 +303,7 @@ function App() {
       const addr = event?.args?.collection || '';
 
       setCollection(addr);
+
       setStatus({
         type: 'launch',
         tx: receipt.hash,
@@ -325,11 +319,11 @@ function App() {
 
       setEpoch((prev) => ({
         ...prev,
-        vault: DEFAULT_VAULT,
+        tokenStart: '-',
         currentEpoch: '-',
-        executed: false,
-        totalAirdropped: '-',
-        totalBurned: '-',
+        executedCount: '-',
+        nextReadyAt: '-',
+        state: 'Not loaded',
         tx: '',
         error: '',
       }));
@@ -462,6 +456,7 @@ function App() {
       await tx.wait();
 
       await refreshCollection(collection);
+
       alert('Vault locked.');
     } catch (error) {
       alert(error.shortMessage || error.message || 'Lock vault gagal.');
@@ -475,41 +470,43 @@ function App() {
     setEpoch((prev) => ({ ...prev, loading: true, error: '' }));
 
     try {
+      const tokenAddr = status?.token;
+
+      if (!tokenAddr || !isAddress(tokenAddr)) {
+        throw new Error('Token belum tersedia. Load collection yang sudah bonded dulu.');
+      }
+
       const provider = getReadProvider();
       const vaultAddr = await resolveVaultAddress(provider);
       const vault = new ethers.Contract(vaultAddr, VAULT_ABI, provider);
 
-      const currentEpoch = await vault.currentEpoch();
+      const start = await vault.tokenStart(tokenAddr);
+      const executed = await vault.executedEpochs(tokenAddr);
 
-      let executed = false;
-      let totalAirdropped = '-';
-      let totalBurned = '-';
+      let nextReadyAt = 0n;
+      let state = 'Not registered';
 
-      try {
-        executed = await vault.epochExecuted(currentEpoch);
-      } catch {
-        executed = false;
-      }
+      if (start > 0n && Number(executed) >= 5) {
+        state = 'All epochs done';
+      } else if (start > 0n) {
+        const nextDelay = await vault.epochTimes(executed);
+        nextReadyAt = start + nextDelay;
 
-      try {
-        totalAirdropped = formatTokenAmount(await vault.totalAirdropped());
-      } catch {
-        totalAirdropped = '-';
-      }
+        const block = await provider.getBlock('latest');
+        const now = BigInt(block.timestamp);
 
-      try {
-        totalBurned = formatTokenAmount(await vault.totalBurned());
-      } catch {
-        totalBurned = '-';
+        state = now >= nextReadyAt ? 'Ready' : 'Too early';
       }
 
       setEpoch((prev) => ({
         ...prev,
         vault: vaultAddr,
-        currentEpoch: currentEpoch.toString(),
-        executed,
-        totalAirdropped,
-        totalBurned,
+        tokenStart: start > 0n ? formatUnixTime(start) : 'Not registered',
+        currentEpoch:
+          start > 0n && Number(executed) < 5 ? Number(executed) + 1 : '-',
+        executedCount: executed.toString(),
+        nextReadyAt: nextReadyAt > 0n ? formatUnixTime(nextReadyAt) : '-',
+        state,
         loading: false,
         error: '',
       }));
@@ -528,16 +525,19 @@ function App() {
     setBusy(true);
 
     try {
+      const tokenAddr = status?.token;
+
+      if (!tokenAddr || !isAddress(tokenAddr)) {
+        throw new Error('Token belum tersedia. Load collection yang sudah bonded dulu.');
+      }
+
       const signer = await prepare();
       const vaultAddr = await resolveVaultAddress(signer.provider);
       const vault = new ethers.Contract(vaultAddr, VAULT_ABI, signer);
 
-      const epochId =
-        epoch.currentEpoch && epoch.currentEpoch !== '-'
-          ? BigInt(epoch.currentEpoch)
-          : await vault.currentEpoch();
+      const loser = account || (await signer.getAddress());
 
-      const tx = await vault.executeEpochPayout(epochId);
+      const tx = await vault.executeEpoch(tokenAddr, [loser]);
 
       setEpoch((prev) => ({
         ...prev,
@@ -547,43 +547,18 @@ function App() {
       await tx.wait();
       await loadEpochStatus();
 
-      alert('Epoch payout executed.');
+      alert('Epoch executed.');
     } catch (error) {
-      alert(error.shortMessage || error.message || 'Execute payout gagal.');
+      alert(error.shortMessage || error.message || 'Execute epoch gagal.');
     } finally {
       setBusy(false);
     }
   }
 
   async function executeBurn() {
-    setBusy(true);
-
-    try {
-      const signer = await prepare();
-      const vaultAddr = await resolveVaultAddress(signer.provider);
-      const vault = new ethers.Contract(vaultAddr, VAULT_ABI, signer);
-
-      const epochId =
-        epoch.currentEpoch && epoch.currentEpoch !== '-'
-          ? BigInt(epoch.currentEpoch)
-          : await vault.currentEpoch();
-
-      const tx = await vault.executeBurn(epochId);
-
-      setEpoch((prev) => ({
-        ...prev,
-        tx: tx.hash,
-      }));
-
-      await tx.wait();
-      await loadEpochStatus();
-
-      alert('Burn executed.');
-    } catch (error) {
-      alert(error.shortMessage || error.message || 'Execute burn gagal.');
-    } finally {
-      setBusy(false);
-    }
+    alert(
+      'Burn tidak terpisah. Di RecomVault sekarang burn otomatis jalan saat Execute Epoch.'
+    );
   }
 
   return (
@@ -739,19 +714,26 @@ function App() {
             <div className="section-head">
               <div>
                 <h2>Epoch Airdrop / Burn</h2>
-                <p>Read and execute RecomVault epoch actions.</p>
+                <p>Connected to RecomVault executeEpoch.</p>
               </div>
-              <span className={epoch.executed ? 'badge ok' : 'badge'}>
-                {epoch.executed ? 'Executed' : 'Active'}
+              <span className={epoch.state === 'Ready' ? 'badge ok' : 'badge'}>
+                {epoch.state}
               </span>
             </div>
 
             <div className="epoch-grid">
-              <Stat label="Vault" value={epoch.vault ? shortAddress(epoch.vault) : 'Not set'} />
+              <Stat
+                label="Vault"
+                value={epoch.vault ? shortAddress(epoch.vault) : 'Not set'}
+              />
+              <Stat
+                label="Token"
+                value={status?.token ? shortAddress(status.token) : 'Not set'}
+              />
+              <Stat label="Token start" value={epoch.tokenStart} />
               <Stat label="Current epoch" value={epoch.currentEpoch} />
-              <Stat label="Epoch executed" value={epoch.executed ? 'Yes' : 'No'} />
-              <Stat label="Total airdropped" value={epoch.totalAirdropped} />
-              <Stat label="Total burned" value={epoch.totalBurned} />
+              <Stat label="Executed count" value={epoch.executedCount} />
+              <Stat label="Next ready at" value={epoch.nextReadyAt} />
             </div>
 
             {epoch.error && <p className="error-text">{epoch.error}</p>}
@@ -788,10 +770,10 @@ function App() {
                 {epoch.loading ? 'Loading...' : 'Refresh Epoch'}
               </button>
               <button disabled={busy} onClick={executeEpochPayout}>
-                Execute Payout
+                Execute Epoch
               </button>
               <button disabled={busy} onClick={executeBurn}>
-                Execute Burn
+                Burn Info
               </button>
             </div>
           </div>
@@ -815,7 +797,7 @@ function App() {
             text="Vault lock activated."
           />
           <Step
-            done={epoch.currentEpoch !== '-'}
+            done={epoch.state === 'Ready' || Number(epoch.executedCount || 0) > 0}
             title="5 Epoch"
             text="Airdrop and burn module."
           />

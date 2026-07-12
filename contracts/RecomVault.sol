@@ -12,11 +12,11 @@ contract RecomVault {
     address public tokenFactory;
 
     uint256[5] public epochTimes = [
-        uint256(1 days),
-        7 days,
-        14 days,
-        28 days,
-        56 days
+        uint256(0),
+        0,
+        0,
+        0,
+        0
     ];
 
     mapping(address => uint256) public tokenStart;
