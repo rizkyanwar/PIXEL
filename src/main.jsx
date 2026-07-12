@@ -17,8 +17,8 @@ const DEFAULT_COLLECTION = import.meta.env.VITE_DEFAULT_COLLECTION || '';
 const DEFAULT_TOKEN = import.meta.env.VITE_DEFAULT_TOKEN || '';
 const DEFAULT_POOL = import.meta.env.VITE_DEFAULT_POOL || '';
 const DEFAULT_VAULT = import.meta.env.VITE_RECOM_VAULT || '';
-const DEV_MODE = import.meta.env.VITE_DEV_MODE === 'true';
 
+const DEV_MODE = import.meta.env.VITE_DEV_MODE === 'true';
 const MAX_SUPPLY = Number(import.meta.env.VITE_MAX_SUPPLY || 100);
 
 const LAUNCHPAD_ABI = [
@@ -76,7 +76,6 @@ function formatUnixTime(value) {
 
 function toHttpUri(uri) {
   if (!uri) return '';
-
   const clean = uri.trim();
 
   if (clean.startsWith('ipfs://')) {
@@ -200,6 +199,7 @@ function App() {
 
     const provider = new ethers.BrowserProvider(window.ethereum);
     const accounts = await provider.send('eth_requestAccounts', []);
+
     setAccount(accounts[0]);
 
     const net = await provider.getNetwork();
@@ -546,8 +546,8 @@ function App() {
       const signer = await prepare();
       const vaultAddr = await resolveVaultAddress(signer.provider);
       const vault = new ethers.Contract(vaultAddr, VAULT_ABI, signer);
-
       const loser = account || (await signer.getAddress());
+
       const tx = await vault.executeEpoch(tokenAddr, [loser]);
 
       setEpoch((prev) => ({
@@ -599,9 +599,9 @@ function App() {
             <p className="pill">HOOKED • Robinhood Chain Testnet</p>
             <h1>NFT first. Token bonded at final mint.</h1>
             <p>
-              Launch collection, mint NFT through bonding curve, auto deploy
-              token, create seed pool, lock vault, then continue to epoch
-              airdrop and burn.
+              {DEV_MODE
+                ? 'Launch collection, mint NFT through bonding curve, auto deploy token, create seed pool, lock vault, then continue to epoch airdrop and burn.'
+                : 'Launch collection, mint NFT through bonding curve, and open the bonded token or pool after final mint.'}
             </p>
 
             <div className="hero-stats">
@@ -611,6 +611,33 @@ function App() {
                 label="Launchpad"
                 value={LAUNCHPAD ? shortAddress(LAUNCHPAD) : 'Not set'}
               />
+            </div>
+
+            <div className="hero-art-card">
+              <img src={hookedLogo} alt="" aria-hidden="true" />
+
+              <div className="hero-art-content">
+                <span>NFT-FIRST LAUNCHPAD</span>
+
+                <h2>
+                  Mint the art.
+                  <br />
+                  Bond the token.
+                  <br />
+                  Open the pool.
+                </h2>
+
+                <p>
+                  One collection launch. One mint button. Final mint unlocks the
+                  token and pool automatically.
+                </p>
+              </div>
+
+              <div className="hero-art-footer">
+                <b>Launch</b>
+                <b>Mint</b>
+                <b>Bond</b>
+              </div>
             </div>
           </div>
 
@@ -628,43 +655,36 @@ function App() {
                 value={form.collectionName}
                 onChange={(v) => update('collectionName', v)}
               />
-
               <Field
                 label="Collection symbol"
                 value={form.collectionSymbol}
                 onChange={(v) => update('collectionSymbol', v)}
               />
-
               <Field
                 label="Token name"
                 value={form.tokenName}
                 onChange={(v) => update('tokenName', v)}
               />
-
               <Field
                 label="Token symbol"
                 value={form.tokenSymbol}
                 onChange={(v) => update('tokenSymbol', v)}
               />
-
               <Field
                 label="Starting MC (ETH)"
                 value={form.startingMc}
                 onChange={(v) => update('startingMc', v)}
               />
-
               <Field
                 label="Base mint (ETH)"
                 value={form.baseMint}
                 onChange={(v) => update('baseMint', v)}
               />
-
               <Field
                 label="Price step (ETH)"
                 value={form.priceStep}
                 onChange={(v) => update('priceStep', v)}
               />
-
               <Field
                 label="Decay window (sec)"
                 value={form.decayWindow}
@@ -727,8 +747,12 @@ function App() {
           <div className="manage card">
             <div className="section-head">
               <div>
-                <h2>Collection Control</h2>
-                <p>Load collection and mint NFT through bonding curve.</p>
+                <h2>{DEV_MODE ? 'Collection Control' : 'Mint NFT'}</h2>
+                <p>
+                  {DEV_MODE
+                    ? 'Load collection and mint NFT through bonding curve.'
+                    : 'Load collection and mint NFT.'}
+                </p>
               </div>
             </div>
 
@@ -756,6 +780,7 @@ function App() {
                   <h2>Epoch Airdrop / Burn</h2>
                   <p>Connected to RecomVault executeEpoch.</p>
                 </div>
+
                 <span className={epoch.state === 'Ready' ? 'badge ok' : 'badge'}>
                   {epoch.state}
                 </span>
@@ -821,27 +846,34 @@ function App() {
         </section>
 
         <section className="steps">
-          <Step done title="1 Launch NFT" text="Collection created." />
+          <Step done title="1 Launch Collection" text="Collection created." />
           <Step
             done={Number(status?.total || 0) > 0}
-            title={`2 Mint to ${MAX_SUPPLY}`}
-            text="Mint through bonding curve."
+            title="2 Mint NFT"
+            text={`Mint progress to ${MAX_SUPPLY}.`}
           />
           <Step
             done={Boolean(status?.bonded)}
-            title="3 Auto Token"
-            text="Token deployed after final mint."
+            title="3 Open Token / Pool"
+            text="Available after final mint."
           />
-          <Step
-            done={Boolean(status?.vaultLocked)}
-            title="4 Lock Vault"
-            text="Vault lock activated."
-          />
-          <Step
-            done={epoch.state === 'Ready' || Number(epoch.executedCount || 0) > 0}
-            title="5 Epoch"
-            text="Automated by keeper."
-          />
+
+          {DEV_MODE && (
+            <>
+              <Step
+                done={Boolean(status?.vaultLocked)}
+                title="4 Lock Vault"
+                text="Vault lock activated."
+              />
+              <Step
+                done={
+                  epoch.state === 'Ready' || Number(epoch.executedCount || 0) > 0
+                }
+                title="5 Epoch"
+                text="Automated by keeper."
+              />
+            </>
+          )}
         </section>
       </main>
     </div>
@@ -904,18 +936,31 @@ function Step({ done, title, text }) {
 function StatusCard({ status, onLock }) {
   const minted = Number(status.total || 0);
   const progress = Math.min(100, Math.round((minted / MAX_SUPPLY) * 100));
+  const safeProgress = Number.isFinite(progress) ? progress : 0;
 
   return (
     <div className="status-card">
-      <div className="progress-wrap">
-        <div className="progress-label">
-          <span>Mint progress</span>
-          <b>
-            {status.total ?? '-'} / {MAX_SUPPLY}
-          </b>
+      <div className="progress-wrap progress-hero">
+        <div className="progress-top">
+          <div>
+            <small>Mint Progress</small>
+            <h3>
+              {status.total ?? '-'} / {MAX_SUPPLY}
+            </h3>
+            <p>NFTs minted</p>
+          </div>
+
+          <div className="progress-percent">{safeProgress}%</div>
         </div>
+
         <div className="progress">
-          <div style={{ width: `${progress}%` }} />
+          <div style={{ width: `${safeProgress}%` }} />
+        </div>
+
+        <div className="progress-meta">
+          <span>{status.bonded ? 'Bonded' : 'Minting'}</span>
+          <span>{status.token ? 'Token ready' : 'Token pending'}</span>
+          <span>{status.pool ? 'Pool ready' : 'Pool pending'}</span>
         </div>
       </div>
 
@@ -925,72 +970,126 @@ function StatusCard({ status, onLock }) {
           value={shortAddress(status.collection)}
           copyValue={status.collection}
         />
-        <StatusItem label="Current price" value={`${status.price ?? '-'} ETH`} />
+
+        <StatusItem
+          label="Current price"
+          value={`${status.price ?? '-'} ETH`}
+        />
+
         <StatusItem
           label="Bonded"
           value={status.bonded ? 'Yes' : 'No'}
           ok={status.bonded}
         />
+
         <StatusItem
           label="Token"
           value={status.token ? shortAddress(status.token) : 'Not deployed'}
           ok={Boolean(status.token)}
           copyValue={status.token}
         />
+
         <StatusItem
           label="Pool"
           value={status.pool ? shortAddress(status.pool) : 'Not created'}
           ok={Boolean(status.pool)}
           copyValue={status.pool}
         />
-        <StatusItem
-          label="Vault locked"
-          value={
-            status.vaultLocked === null
-              ? 'Unknown'
-              : status.vaultLocked
-                ? 'Locked'
-                : 'Unlocked'
-          }
-          ok={Boolean(status.vaultLocked)}
-        />
-      </div>
 
-      <div className="links">
-        {status.tx && (
-          <a target="_blank" rel="noreferrer" href={explorerTx(status.tx)}>
-            Open Tx
-          </a>
-        )}
-
-        {status.collection && (
-          <a
-            target="_blank"
-            rel="noreferrer"
-            href={explorerAddress(status.collection)}
-          >
-            Open Collection
-          </a>
-        )}
-
-        {status.token && (
-          <a target="_blank" rel="noreferrer" href={explorerAddress(status.token)}>
-            Open Token
-          </a>
-        )}
-
-        {status.pool && (
-          <a target="_blank" rel="noreferrer" href={explorerAddress(status.pool)}>
-            Open Pool
-          </a>
-        )}
-
-        {DEV_MODE && status.token && !status.vaultLocked && (
-          <button type="button" onClick={onLock}>
-            Lock Vault
-          </button>
+        {DEV_MODE && (
+          <StatusItem
+            label="Vault locked"
+            value={
+              status.vaultLocked === null
+                ? 'Unknown'
+                : status.vaultLocked
+                  ? 'Locked'
+                  : 'Unlocked'
+            }
+            ok={Boolean(status.vaultLocked)}
+          />
         )}
       </div>
+
+      <div className="action-links">
+  {status.collection ? (
+    <a
+      className="action-link"
+      target="_blank"
+      rel="noreferrer"
+      href={explorerAddress(status.collection)}
+    >
+      <small>Explorer</small>
+      <b>Open Collection</b>
+      <span>{shortAddress(status.collection)}</span>
+    </a>
+  ) : (
+    <div className="action-link disabled">
+      <small>Explorer</small>
+      <b>Open Collection</b>
+      <span>Launch first</span>
+    </div>
+  )}
+
+  {status.token ? (
+    <a
+      className="action-link"
+      target="_blank"
+      rel="noreferrer"
+      href={explorerAddress(status.token)}
+    >
+      <small>Token</small>
+      <b>Open Token</b>
+      <span>{shortAddress(status.token)}</span>
+    </a>
+  ) : (
+    <div className="action-link disabled">
+      <small>Token</small>
+      <b>Open Token</b>
+      <span>After final mint</span>
+    </div>
+  )}
+
+  {status.pool ? (
+    <a
+      className="action-link"
+      target="_blank"
+      rel="noreferrer"
+      href={explorerAddress(status.pool)}
+    >
+      <small>Pool</small>
+      <b>Open Pool</b>
+      <span>{shortAddress(status.pool)}</span>
+    </a>
+  ) : (
+    <div className="action-link disabled">
+      <small>Pool</small>
+      <b>Open Pool</b>
+      <span>After bonding</span>
+    </div>
+  )}
+
+  {status.tx && (
+    <a
+      className="action-link subtle"
+      target="_blank"
+      rel="noreferrer"
+      href={explorerTx(status.tx)}
+    >
+      <small>Transaction</small>
+      <b>Open Tx</b>
+      <span>View latest tx</span>
+    </a>
+  )}
+
+  {DEV_MODE && status.token && !status.vaultLocked && (
+    <button type="button" className="action-link dev-action" onClick={onLock}>
+      <small>Dev only</small>
+      <b>Lock Vault</b>
+      <span>Manual fallback</span>
+    </button>
+  )}
+</div>
     </div>
   );
 }
