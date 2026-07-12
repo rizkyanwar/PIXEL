@@ -75,7 +75,8 @@ body::after {
 
 button,
 input,
-select {
+select,
+textarea {
   font: inherit;
 }
 
@@ -130,7 +131,8 @@ a {
 }
 
 input,
-select {
+select,
+textarea {
   width: 100%;
   border: 1px solid var(--line);
   border-radius: 16px;
@@ -142,14 +144,22 @@ select {
   outline: none;
 }
 
-input::placeholder {
+input::placeholder,
+textarea::placeholder {
   color: rgba(244, 255, 232, 0.36);
 }
 
 input:focus,
-select:focus {
+select:focus,
+textarea:focus {
   border-color: rgba(182, 255, 0, 0.68);
   box-shadow: 0 0 0 4px rgba(182, 255, 0, 0.08);
+}
+
+textarea {
+  min-height: 92px;
+  resize: vertical;
+  line-height: 1.5;
 }
 
 select {
@@ -420,6 +430,85 @@ h2 {
   grid-column: 1 / -1;
 }
 
+/* Launch image preview */
+
+.collection-preview {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-top: 18px;
+  margin-bottom: 18px;
+  border: 1px solid rgba(182, 255, 0, 0.24);
+  border-radius: 24px;
+  padding: 14px;
+  background:
+    radial-gradient(circle at top left, rgba(182, 255, 0, 0.14), transparent 34%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.045), transparent),
+    rgba(0, 0, 0, 0.2);
+}
+
+.preview-image {
+  overflow: hidden;
+  display: grid;
+  flex: 0 0 88px;
+  place-items: center;
+  width: 88px;
+  height: 88px;
+  border: 1px solid rgba(182, 255, 0, 0.34);
+  border-radius: 20px;
+  background:
+    linear-gradient(145deg, rgba(182, 255, 0, 0.12), transparent),
+    rgba(0, 0, 0, 0.32);
+}
+
+.preview-image img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.preview-image span {
+  color: rgba(244, 255, 232, 0.42);
+  font-size: 0.72rem;
+}
+
+.preview-info {
+  min-width: 0;
+}
+
+.preview-info small {
+  display: block;
+  margin-bottom: 0.35rem;
+  color: rgba(215, 255, 63, 0.78);
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.preview-info b {
+  overflow: hidden;
+  display: block;
+  color: var(--text);
+  font-size: 1.04rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.preview-info span {
+  display: block;
+  margin-top: 0.2rem;
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.preview-info p {
+  margin: 0.52rem 0 0;
+  color: rgba(244, 255, 232, 0.72);
+  font-size: 0.84rem;
+  line-height: 1.48;
+}
+
 .primary {
   width: 100%;
   margin-top: 18px;
@@ -443,6 +532,23 @@ h2 {
   display: grid;
   grid-template-columns: 1.15fr 0.85fr;
   gap: 24px;
+}
+
+/* User production mode: make Collection Control full width when dev panel is hidden */
+.dashboard.single {
+  grid-template-columns: 1fr;
+}
+
+.dashboard.single .manage {
+  width: 100%;
+}
+
+.dashboard.single .status-grid {
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+}
+
+.dashboard.single .links {
+  justify-content: flex-start;
 }
 
 .row {
@@ -548,11 +654,11 @@ h2 {
   flex: 0 0 auto;
   width: 28px;
   height: 28px;
+  border: 1px solid rgba(182, 255, 0, 0.68);
   border-radius: 10px;
   padding: 0;
   color: #081000;
   background: linear-gradient(135deg, #d7ff3f, #b6ff00);
-  border: 1px solid rgba(182, 255, 0, 0.68);
   font-size: 0.95rem;
   font-weight: 900;
   line-height: 1;
@@ -633,6 +739,10 @@ h2 {
     grid-template-columns: 1fr;
   }
 
+  .dashboard.single .status-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .steps {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -670,8 +780,20 @@ h2 {
   .hero-stats,
   .status-grid,
   .epoch-grid,
-  .steps {
+  .steps,
+  .dashboard.single .status-grid {
     grid-template-columns: 1fr;
+  }
+
+  .collection-preview {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .preview-image {
+    width: 100%;
+    height: 190px;
+    flex-basis: auto;
   }
 
   h1 {

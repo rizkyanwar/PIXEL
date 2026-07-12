@@ -11,21 +11,51 @@ contract RecomToken is ERC20 {
     address public immutable factory;
     address public immutable canonicalVault;
     uint256 public immutable deployedAt;
+
     bool public vaultLocked;
 
-    constructor(string memory name_, string memory symbol_, address poolReceiver_, address vault_) ERC20(name_, symbol_) {
+    event VaultLocked(address indexed vault, uint256 amount);
+
+    constructor(
+        string memory name_,
+        string memory symbol_,
+        address poolReceiver_,
+        address vault_
+    ) ERC20(name_, symbol_) {
+        require(poolReceiver_ != address(0), "Bad pool");
+        require(vault_ != address(0), "Bad vault");
+
         factory = msg.sender;
         canonicalVault = vault_;
         deployedAt = block.timestamp;
+
         _mint(poolReceiver_, POOL_SUPPLY);
         _mint(address(this), VAULT_SUPPLY);
     }
 
-    function lockVault() external {
+    modifier onlyFactoryOrVault() {
+        require(
+            msg.sender == factory || msg.sender == canonicalVault,
+            "Not allowed"
+        );
+        _;
+    }
+
+    function vault() external view returns (address) {
+        return canonicalVault;
+    }
+
+    function lockVault() external onlyFactoryOrVault {
         require(!vaultLocked, "Vault locked");
-        require(block.timestamp >= deployedAt, "Wait");
+
+        uint256 amount = balanceOf(address(this));
+        require(amount > 0, "No vault balance");
+
         vaultLocked = true;
-        _transfer(address(this), canonicalVault, balanceOf(address(this)));
+
+        _transfer(address(this), canonicalVault, amount);
+
+        emit VaultLocked(canonicalVault, amount);
     }
 
     function burnFromVault(uint256 amount) external {

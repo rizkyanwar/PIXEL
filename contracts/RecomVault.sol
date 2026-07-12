@@ -12,12 +12,12 @@ contract RecomVault {
     address public tokenFactory;
 
     uint256[5] public epochTimes = [
-        uint256(0),
-        0,
-        0,
-        0,
-        0
-    ];
+    uint256(1 days),
+    7 days,
+    14 days,
+    28 days,
+    56 days
+];
 
     mapping(address => uint256) public tokenStart;
     mapping(address => uint8) public executedEpochs;
@@ -46,6 +46,7 @@ contract RecomVault {
     }
 
     function registerToken(address token) external {
+        require(token != address(0), "Bad token");
         require(
             msg.sender == owner || msg.sender == tokenFactory,
             "Not allowed"
@@ -61,6 +62,8 @@ contract RecomVault {
         address token,
         address[] calldata losers
     ) external onlyOwner {
+        require(token != address(0), "Bad token");
+
         uint8 epoch = executedEpochs[token];
 
         require(epoch < 5, "Done");

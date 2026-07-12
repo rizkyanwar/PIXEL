@@ -17,6 +17,7 @@ const DEFAULT_COLLECTION = import.meta.env.VITE_DEFAULT_COLLECTION || '';
 const DEFAULT_TOKEN = import.meta.env.VITE_DEFAULT_TOKEN || '';
 const DEFAULT_POOL = import.meta.env.VITE_DEFAULT_POOL || '';
 const DEFAULT_VAULT = import.meta.env.VITE_RECOM_VAULT || '';
+const DEV_MODE = import.meta.env.VITE_DEV_MODE === 'true';
 
 const MAX_SUPPLY = Number(import.meta.env.VITE_MAX_SUPPLY || 100);
 
@@ -69,10 +70,20 @@ function isAddress(addr) {
 
 function formatUnixTime(value) {
   const n = Number(value || 0);
-
   if (!n) return '-';
-
   return new Date(n * 1000).toLocaleString();
+}
+
+function toHttpUri(uri) {
+  if (!uri) return '';
+
+  const clean = uri.trim();
+
+  if (clean.startsWith('ipfs://')) {
+    return `https://ipfs.io/ipfs/${clean.replace('ipfs://', '')}`;
+  }
+
+  return clean;
 }
 
 async function copyText(text, label = 'Address') {
@@ -147,7 +158,10 @@ function App() {
   });
 
   const [form, setForm] = useState({
-    uri: '{{https://example.com/metadata/{id}}}.json',
+    uri: 'https://example.com/metadata/{id}.json',
+    imageUri: '',
+    description:
+      'HOOKED NFT-first bonding collection on Robinhood Chain Testnet.',
     collectionName: 'HOOKED NFT',
     collectionSymbol: 'HOOKED',
     tokenName: 'HOOKED Token',
@@ -186,7 +200,6 @@ function App() {
 
     const provider = new ethers.BrowserProvider(window.ethereum);
     const accounts = await provider.send('eth_requestAccounts', []);
-
     setAccount(accounts[0]);
 
     const net = await provider.getNetwork();
@@ -456,7 +469,6 @@ function App() {
       await tx.wait();
 
       await refreshCollection(collection);
-
       alert('Vault locked.');
     } catch (error) {
       alert(error.shortMessage || error.message || 'Lock vault gagal.');
@@ -536,7 +548,6 @@ function App() {
       const vault = new ethers.Contract(vaultAddr, VAULT_ABI, signer);
 
       const loser = account || (await signer.getAddress());
-
       const tx = await vault.executeEpoch(tokenAddr, [loser]);
 
       setEpoch((prev) => ({
@@ -617,36 +628,43 @@ function App() {
                 value={form.collectionName}
                 onChange={(v) => update('collectionName', v)}
               />
+
               <Field
                 label="Collection symbol"
                 value={form.collectionSymbol}
                 onChange={(v) => update('collectionSymbol', v)}
               />
+
               <Field
                 label="Token name"
                 value={form.tokenName}
                 onChange={(v) => update('tokenName', v)}
               />
+
               <Field
                 label="Token symbol"
                 value={form.tokenSymbol}
                 onChange={(v) => update('tokenSymbol', v)}
               />
+
               <Field
                 label="Starting MC (ETH)"
                 value={form.startingMc}
                 onChange={(v) => update('startingMc', v)}
               />
+
               <Field
                 label="Base mint (ETH)"
                 value={form.baseMint}
                 onChange={(v) => update('baseMint', v)}
               />
+
               <Field
                 label="Price step (ETH)"
                 value={form.priceStep}
                 onChange={(v) => update('priceStep', v)}
               />
+
               <Field
                 label="Decay window (sec)"
                 value={form.decayWindow}
@@ -666,13 +684,34 @@ function App() {
               </label>
 
               <label className="wide">
+                Image URI
+                <input
+                  value={form.imageUri}
+                  onChange={(event) => update('imageUri', event.target.value)}
+                  placeholder="ipfs://.../image.png or https://..."
+                />
+              </label>
+
+              <label className="wide">
+                Description
+                <textarea
+                  value={form.description}
+                  onChange={(event) => update('description', event.target.value)}
+                  placeholder="Collection description"
+                />
+              </label>
+
+              <label className="wide">
                 Metadata URI
                 <input
                   value={form.uri}
                   onChange={(event) => update('uri', event.target.value)}
+                  placeholder="ipfs://.../metadata.json or https://..."
                 />
               </label>
             </div>
+
+            <CollectionPreview form={form} />
 
             <button
               className="primary"
@@ -684,12 +723,12 @@ function App() {
           </div>
         </section>
 
-        <section className="dashboard">
+        <section className={DEV_MODE ? 'dashboard' : 'dashboard single'}>
           <div className="manage card">
             <div className="section-head">
               <div>
                 <h2>Collection Control</h2>
-                <p>Load collection, mint NFT, and trigger vault lock.</p>
+                <p>Load collection and mint NFT through bonding curve.</p>
               </div>
             </div>
 
@@ -710,73 +749,75 @@ function App() {
             {status && <StatusCard status={status} onLock={lockVault} />}
           </div>
 
-          <div className="epoch card">
-            <div className="section-head">
-              <div>
-                <h2>Epoch Airdrop / Burn</h2>
-                <p>Connected to RecomVault executeEpoch.</p>
+          {DEV_MODE && (
+            <div className="epoch card">
+              <div className="section-head">
+                <div>
+                  <h2>Epoch Airdrop / Burn</h2>
+                  <p>Connected to RecomVault executeEpoch.</p>
+                </div>
+                <span className={epoch.state === 'Ready' ? 'badge ok' : 'badge'}>
+                  {epoch.state}
+                </span>
               </div>
-              <span className={epoch.state === 'Ready' ? 'badge ok' : 'badge'}>
-                {epoch.state}
-              </span>
-            </div>
 
-            <div className="epoch-grid">
-              <Stat
-                label="Vault"
-                value={epoch.vault ? shortAddress(epoch.vault) : 'Not set'}
-              />
-              <Stat
-                label="Token"
-                value={status?.token ? shortAddress(status.token) : 'Not set'}
-              />
-              <Stat label="Token start" value={epoch.tokenStart} />
-              <Stat label="Current epoch" value={epoch.currentEpoch} />
-              <Stat label="Executed count" value={epoch.executedCount} />
-              <Stat label="Next ready at" value={epoch.nextReadyAt} />
-            </div>
+              <div className="epoch-grid">
+                <Stat
+                  label="Vault"
+                  value={epoch.vault ? shortAddress(epoch.vault) : 'Not set'}
+                />
+                <Stat
+                  label="Token"
+                  value={status?.token ? shortAddress(status.token) : 'Not set'}
+                />
+                <Stat label="Token start" value={epoch.tokenStart} />
+                <Stat label="Current epoch" value={epoch.currentEpoch} />
+                <Stat label="Executed count" value={epoch.executedCount} />
+                <Stat label="Next ready at" value={epoch.nextReadyAt} />
+              </div>
 
-            {epoch.error && <p className="error-text">{epoch.error}</p>}
+              {epoch.error && <p className="error-text">{epoch.error}</p>}
 
-            <div className="links">
-              {epoch.vault && isAddress(epoch.vault) && (
-                <>
-                  <a
-                    target="_blank"
-                    rel="noreferrer"
-                    href={explorerAddress(epoch.vault)}
-                  >
-                    Open Vault
+              <div className="links">
+                {epoch.vault && isAddress(epoch.vault) && (
+                  <>
+                    <a
+                      target="_blank"
+                      rel="noreferrer"
+                      href={explorerAddress(epoch.vault)}
+                    >
+                      Open Vault
+                    </a>
+                    <button
+                      type="button"
+                      className="copy-icon-btn text-btn"
+                      onClick={() => copyText(epoch.vault, 'Vault')}
+                    >
+                      <CopyIcon />
+                    </button>
+                  </>
+                )}
+
+                {epoch.tx && (
+                  <a target="_blank" rel="noreferrer" href={explorerTx(epoch.tx)}>
+                    Open Tx
                   </a>
-                  <button
-                    type="button"
-                    className="copy-icon-btn text-btn"
-                    onClick={() => copyText(epoch.vault, 'Vault')}
-                  >
-                    <CopyIcon />
-                  </button>
-                </>
-              )}
+                )}
+              </div>
 
-              {epoch.tx && (
-                <a target="_blank" rel="noreferrer" href={explorerTx(epoch.tx)}>
-                  Open Tx
-                </a>
-              )}
+              <div className="row">
+                <button disabled={busy} onClick={loadEpochStatus}>
+                  {epoch.loading ? 'Loading...' : 'Refresh Epoch'}
+                </button>
+                <button disabled={busy} onClick={executeEpochPayout}>
+                  Execute Epoch
+                </button>
+                <button disabled={busy} onClick={executeBurn}>
+                  Burn Info
+                </button>
+              </div>
             </div>
-
-            <div className="row">
-              <button disabled={busy} onClick={loadEpochStatus}>
-                {epoch.loading ? 'Loading...' : 'Refresh Epoch'}
-              </button>
-              <button disabled={busy} onClick={executeEpochPayout}>
-                Execute Epoch
-              </button>
-              <button disabled={busy} onClick={executeBurn}>
-                Burn Info
-              </button>
-            </div>
-          </div>
+          )}
         </section>
 
         <section className="steps">
@@ -799,7 +840,7 @@ function App() {
           <Step
             done={epoch.state === 'Ready' || Number(epoch.executedCount || 0) > 0}
             title="5 Epoch"
-            text="Airdrop and burn module."
+            text="Automated by keeper."
           />
         </section>
       </main>
@@ -813,6 +854,29 @@ function Field({ label, value, onChange }) {
       {label}
       <input value={value} onChange={(event) => onChange(event.target.value)} />
     </label>
+  );
+}
+
+function CollectionPreview({ form }) {
+  const imageSrc = toHttpUri(form.imageUri);
+
+  return (
+    <div className="collection-preview">
+      <div className="preview-image">
+        {imageSrc ? (
+          <img src={imageSrc} alt="Collection preview" />
+        ) : (
+          <span>No image</span>
+        )}
+      </div>
+
+      <div className="preview-info">
+        <small>Launch preview</small>
+        <b>{form.collectionName || 'Collection name'}</b>
+        <span>{form.collectionSymbol || 'SYMBOL'}</span>
+        <p>{form.description || 'Collection description'}</p>
+      </div>
+    </div>
   );
 }
 
@@ -921,7 +985,7 @@ function StatusCard({ status, onLock }) {
           </a>
         )}
 
-        {status.token && !status.vaultLocked && (
+        {DEV_MODE && status.token && !status.vaultLocked && (
           <button type="button" onClick={onLock}>
             Lock Vault
           </button>
@@ -937,6 +1001,7 @@ function StatusItem({ label, value, ok, copyValue }) {
       <small>{label}</small>
       <div className="status-value">
         <b className={ok ? 'positive' : ''}>{value}</b>
+
         {copyValue && (
           <button
             type="button"
