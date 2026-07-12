@@ -1,0 +1,15 @@
+{
+  "name": "HOOKED NFT #2",
+  "description": "HOOKED NFT-first bonding collection on Robinhood Chain Testnet.",
+  "image": "bafybeibwsr55dt7dxagapdplboajkykgyzpiv2aihho5bcgzl4fqf4ndu4",
+  "attributes": [
+    {
+      "trait_type": "Token ID",
+      "value": "2"
+    },
+    {
+      "trait_type": "Network",
+      "value": "Robinhood Chain Testnet"
+    }
+  ]
+}

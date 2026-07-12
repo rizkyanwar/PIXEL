@@ -1,0 +1,20 @@
+{
+  "name": "HOOKED NFT",
+  "description": "HOOKED NFT-first bonding collection on Robinhood Chain Testnet.",
+  "image": "bafybeibwsr55dt7dxagapdplboajkykgyzpiv2aihho5bcgzl4fqf4ndu4",
+  "external_url": "https://hooked.xyz",
+  "attributes": [
+    {
+      "trait_type": "Network",
+      "value": "Robinhood Chain Testnet"
+    },
+    {
+      "trait_type": "Model",
+      "value": "NFT-first bonding launchpad"
+    },
+    {
+      "trait_type": "Chain ID",
+      "value": "46630"
+    }
+  ]
+}
